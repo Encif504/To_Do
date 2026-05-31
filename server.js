@@ -3,9 +3,10 @@ import cors from 'cors';
 import bodyParser from 'body-parser';
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
+import path from 'path';
 
-// Load environment variables from .env in local development.
-dotenv.config();
+// Load environment variables from the project root .env file.
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
 // Create the Express application instance.
 const app = express();
@@ -20,18 +21,35 @@ let pool;
 
 // Initialize the MySQL database and the todos table before starting the server.
 async function initializeDatabase() {
+  const dbHost = process.env.DB_HOST || 'localhost';
+  const dbUser = process.env.DB_USER;
+  const dbPassword = process.env.DB_PASSWORD;
+  const dbName = process.env.DB_NAME || 'todo_app';
+  const dbPort = Number(process.env.DB_PORT || 3306);
+
+  console.log('MySQL config loaded:', {
+    host: dbHost,
+    user: dbUser,
+    database: dbName,
+    port: dbPort,
+  });
+
+  if (!dbUser) {
+    throw new Error('Database user is missing. Set DB_USER in the root .env file.');
+  }
+
   // Connect to MySQL without selecting a database first.
   const adminConnection = await mysql.createConnection({
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
+    host: dbHost,
+    user: dbUser,
+    password: dbPassword,
+    port: dbPort,
   });
 
   try {
     // Ensure the application database exists.
-    const databaseName = process.env.DB_NAME || 'todo_app';
-    await adminConnection.query(`CREATE DATABASE IF NOT EXISTS ${databaseName}`);
-    console.log(`Database ${databaseName} created or already exists`);
+    await adminConnection.query(`CREATE DATABASE IF NOT EXISTS ${dbName}`);
+    console.log(`Database ${dbName} created or already exists`);
   } catch (error) {
     console.error('Error creating database:', error);
     throw error;
@@ -41,10 +59,11 @@ async function initializeDatabase() {
 
   // Create a connection pool now that the database has been ensured.
   pool = mysql.createPool({
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME || 'todo_app',
+    host: dbHost,
+    user: dbUser,
+    password: dbPassword,
+    database: dbName,
+    port: dbPort,
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,
@@ -157,7 +176,7 @@ async function startServer() {
       console.log(`Server running on http://localhost:${PORT}`);
     });
   } catch (error) {
-    console.error('Failed to start server due to database initialization error');
+    console.error('Failed to start server due to database initialization error:', (error && error.stack) || error);
     process.exit(1);
   }
 }
